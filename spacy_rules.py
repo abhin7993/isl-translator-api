@@ -130,6 +130,7 @@ def eng_isl_translate(doc):
         tag_list.append(token.tag_)
         type_list.append(token.ent_type_)
 
+    # DATE goes first in ISL sentences
     if "DATE" in type_list:
         date_i = type_list.index("DATE")
         done_list.append(date_i)
@@ -144,90 +145,99 @@ def eng_isl_translate(doc):
                     tkn.tag_, tkn.ent_type_,
                     [child for child in tkn.children]))
 
-        if "nsubj" in dep_list:
-            nsubj_i = dep_list.index("nsubj")
-            tkn = doc[nsubj_i]
-            if not tkn.tag_[0] == 'W' and not tkn.i in done_list:
-                done_list.append(nsubj_i)
-                ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                        tkn.ent_type_, [child for child in tkn.children]))
+    # Subject comes next
+    if "nsubj" in dep_list:
+        nsubj_i = dep_list.index("nsubj")
+        tkn = doc[nsubj_i]
+        if not tkn.tag_[0] == 'W' and tkn.i not in done_list:
+            done_list.append(nsubj_i)
+            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
+                    tkn.ent_type_, [child for child in tkn.children]))
 
-        root_i = dep_list.index("ROOT")
-        root_children = [child for child in doc[root_i].children]
+    if "ROOT" not in dep_list:
+        return ISLTokens
 
-        if not {"xcomp", "ccomp", "prep", "advcl"}.isdisjoint([child.dep_ for child in doc[root_i].children]):
-            for child in doc[root_i].children:
-                if child.dep_ in ("xcomp", "ccomp", "prep", "advcl"):
-                    subtree_span = doc[child.left_edge.i : child.right_edge.i + 1]
-                    for tkn in subtree_span:
-                        if not tkn.i in done_list:
-                            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_,
-                                    tkn.head.i, tkn.tag_, tkn.ent_type_,
-                                    [child for child in tkn.children]))
-                            done_list.append(tkn.i)
+    root_i = dep_list.index("ROOT")
+    root_children = [child for child in doc[root_i].children]
 
-        if "dobj" in [child.dep_ for child in doc[root_i].children]:
-            dobj_i_1 = [child.dep_ for child in doc[root_i].children].index("dobj")
-            dobj_i = root_children[dobj_i_1].i
-            tkn = doc[dobj_i]
-            if not dobj_i in done_list:
-                done_list.append(dobj_i)
-                ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                        tkn.ent_type_, [child for child in tkn.children]))
+    # Complements and prepositional phrases
+    if not {"xcomp", "ccomp", "prep", "advcl"}.isdisjoint([child.dep_ for child in doc[root_i].children]):
+        for child in doc[root_i].children:
+            if child.dep_ in ("xcomp", "ccomp", "prep", "advcl"):
+                subtree_span = doc[child.left_edge.i : child.right_edge.i + 1]
+                for tkn in subtree_span:
+                    if tkn.i not in done_list:
+                        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_,
+                                tkn.head.i, tkn.tag_, tkn.ent_type_,
+                                [child for child in tkn.children]))
+                        done_list.append(tkn.i)
 
-        tkn = doc[root_i]
-        done_list.append(root_i)
+    # Direct object comes before root verb
+    if "dobj" in [child.dep_ for child in doc[root_i].children]:
+        dobj_i_1 = [child.dep_ for child in doc[root_i].children].index("dobj")
+        dobj_i = root_children[dobj_i_1].i
+        tkn = doc[dobj_i]
+        if dobj_i not in done_list:
+            done_list.append(dobj_i)
+            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
+                    tkn.ent_type_, [child for child in tkn.children]))
+
+    # Root verb
+    tkn = doc[root_i]
+    done_list.append(root_i)
+    ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
+            tkn.ent_type_, [child for child in tkn.children]))
+    isl_root_i = len(ISLTokens) - 1
+
+    # Auxiliaries after the verb
+    if "aux" in [child.dep_ for child in doc[root_i].children]:
+        aux_i_1 = [child.dep_ for child in doc[root_i].children].index("aux")
+        aux_i = root_children[aux_i_1].i
+        tkn = doc[aux_i]
+        done_list.append(aux_i)
         ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
                 tkn.ent_type_, [child for child in tkn.children]))
-        isl_root_i = len(ISLTokens) - 1
 
-        if "aux" in [child.dep_ for child in doc[root_i].children]:
-            aux_i_1 = [child.dep_ for child in doc[root_i].children].index("aux")
-            aux_i = root_children[aux_i_1].i
-            tkn = doc[aux_i]
-            done_list.append(aux_i)
-            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                    tkn.ent_type_, [child for child in tkn.children]))
+    # Negatives come last
+    if "neg" in dep_list:
+        neg_i = dep_list.index("neg")
+        tkn = doc[neg_i]
+        done_list.append(neg_i)
+        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
+                tkn.ent_type_, [child for child in tkn.children]))
 
-        if "neg" in dep_list:
-            neg_i = dep_list.index("neg")
-            tkn = doc[neg_i]
-            done_list.append(neg_i)
-            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                    tkn.ent_type_, [child for child in tkn.children]))
+    # Question words come last
+    if tag_list and tag_list[0][0] == 'W':
+        tkn = doc[0]
+        done_list.append(0)
+        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
+                tkn.ent_type_, [child for child in tkn.children]))
 
-        if tag_list[0][0] == 'W':
-            tkn = doc[0]
-            done_list.append(0)
-            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                    tkn.ent_type_, [child for child in tkn.children]))
+    j = isl_root_i
+    for tkn in root_children:
+        if tkn.i not in done_list and tkn.dep_ not in ["aux", "punct", "neg"]:
+            done_list.append(tkn.i)
+            ISLTokens.insert(j, ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
+                    tkn.tag_, tkn.ent_type_,
+                    [child for child in tkn.children]))
+            j += 1
+    for tkn in doc:
+        if tkn.i not in done_list and tkn.dep_ not in ["aux", "punct", "neg"]:
+            done_list.append(tkn.i)
+            ISLTokens.insert(j, ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
+                    tkn.tag_, tkn.ent_type_,
+                    [child for child in tkn.children]))
+            j += 1
 
-        j = isl_root_i
-        for tkn in root_children:
-            if not tkn.i in done_list:
-                if not tkn.dep_ in ["aux", "punct", "neg"]:
-                    done_list.append(tkn.i)
-                    ISLTokens.insert(j, ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
-                            tkn.tag_, tkn.ent_type_,
-                            [child for child in tkn.children]))
-                    j += 1
-        for tkn in doc:
-            if not tkn.i in done_list:
-                if not tkn.dep_ in ["aux", "punct", "neg"]:
-                    done_list.append(tkn.i)
-                    ISLTokens.insert(j, ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
-                            tkn.tag_, tkn.ent_type_,
-                            [child for child in tkn.children]))
-                    j += 1
+    # Drop tokens not used in ISL
+    ISLTokens[:] = [isl_tkn for isl_tkn in ISLTokens if isl_tkn.text not in droplist]
 
-        ISLTokens[:] = [isl_tkn for isl_tkn in ISLTokens if not (isl_tkn.text in droplist)]
+    if doc2:
+        ISLTokens2 = eng_isl_translate(doc2)
+        ISLTokens.append(and_tkn)
+        ISLTokens.extend(ISLTokens2)
 
-        if doc2:
-            ISLTokens2 = eng_isl_translate(doc2)
-            ISLTokens.append(and_tkn)
-            ISLTokens.extend(ISLTokens2)
-
-        return ISLTokens
+    return ISLTokens
 
 
 def translate_to_tokens(text):
