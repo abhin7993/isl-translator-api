@@ -4,6 +4,4 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    envVars:
-      - key: PORT
-        value: 8000
+    healthCheckPath: /
