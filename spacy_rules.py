@@ -19,6 +19,13 @@ class ISLToken(NamedTuple):
     tag: str
     ent_type: str
     children: list
+    orig_text: str = ''
+
+
+def make_isl_token(tkn):
+    """Create ISLToken from a spaCy Token, preserving original text."""
+    return ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
+                    tkn.ent_type_, [child for child in tkn.children], tkn.text)
 
 
 def filter_spans(spans):
@@ -118,7 +125,7 @@ def eng_isl_translate(doc):
 
                 if and_i == 0:
                     ISLTokens2 = eng_isl_translate(doc2)
-                    ISLTokens.append(and_tkn)
+                    ISLTokens.append(make_isl_token(and_tkn))
                     ISLTokens.extend(ISLTokens2)
                     return ISLTokens
 
@@ -135,15 +142,12 @@ def eng_isl_translate(doc):
         date_i = type_list.index("DATE")
         done_list.append(date_i)
         tkn = doc[date_i]
-        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                tkn.ent_type_, [child for child in tkn.children]))
+        ISLTokens.append(make_isl_token(tkn))
         if doc[date_i].dep_ == "pobj":
             date_ii = doc[date_i].head.i
             tkn = doc[date_ii]
             done_list.append(date_ii)
-            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
-                    tkn.tag_, tkn.ent_type_,
-                    [child for child in tkn.children]))
+            ISLTokens.append(make_isl_token(tkn))
 
     # Subject comes next
     if "nsubj" in dep_list:
@@ -151,8 +155,7 @@ def eng_isl_translate(doc):
         tkn = doc[nsubj_i]
         if not tkn.tag_[0] == 'W' and tkn.i not in done_list:
             done_list.append(nsubj_i)
-            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                    tkn.ent_type_, [child for child in tkn.children]))
+            ISLTokens.append(make_isl_token(tkn))
 
     if "ROOT" not in dep_list:
         return ISLTokens
@@ -167,9 +170,7 @@ def eng_isl_translate(doc):
                 subtree_span = doc[child.left_edge.i : child.right_edge.i + 1]
                 for tkn in subtree_span:
                     if tkn.i not in done_list:
-                        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_,
-                                tkn.head.i, tkn.tag_, tkn.ent_type_,
-                                [child for child in tkn.children]))
+                        ISLTokens.append(make_isl_token(tkn))
                         done_list.append(tkn.i)
 
     # Direct object comes before root verb
@@ -179,14 +180,12 @@ def eng_isl_translate(doc):
         tkn = doc[dobj_i]
         if dobj_i not in done_list:
             done_list.append(dobj_i)
-            ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                    tkn.ent_type_, [child for child in tkn.children]))
+            ISLTokens.append(make_isl_token(tkn))
 
     # Root verb
     tkn = doc[root_i]
     done_list.append(root_i)
-    ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-            tkn.ent_type_, [child for child in tkn.children]))
+    ISLTokens.append(make_isl_token(tkn))
     isl_root_i = len(ISLTokens) - 1
 
     # Auxiliaries after the verb
@@ -195,38 +194,31 @@ def eng_isl_translate(doc):
         aux_i = root_children[aux_i_1].i
         tkn = doc[aux_i]
         done_list.append(aux_i)
-        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                tkn.ent_type_, [child for child in tkn.children]))
+        ISLTokens.append(make_isl_token(tkn))
 
     # Negatives come last
     if "neg" in dep_list:
         neg_i = dep_list.index("neg")
         tkn = doc[neg_i]
         done_list.append(neg_i)
-        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                tkn.ent_type_, [child for child in tkn.children]))
+        ISLTokens.append(make_isl_token(tkn))
 
     # Question words come last
     if tag_list and tag_list[0][0] == 'W':
         tkn = doc[0]
         done_list.append(0)
-        ISLTokens.append(ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i, tkn.tag_,
-                tkn.ent_type_, [child for child in tkn.children]))
+        ISLTokens.append(make_isl_token(tkn))
 
     j = isl_root_i
     for tkn in root_children:
         if tkn.i not in done_list and tkn.dep_ not in ["aux", "punct", "neg"]:
             done_list.append(tkn.i)
-            ISLTokens.insert(j, ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
-                    tkn.tag_, tkn.ent_type_,
-                    [child for child in tkn.children]))
+            ISLTokens.insert(j, make_isl_token(tkn))
             j += 1
     for tkn in doc:
         if tkn.i not in done_list and tkn.dep_ not in ["aux", "punct", "neg"]:
             done_list.append(tkn.i)
-            ISLTokens.insert(j, ISLToken(tkn.lemma_, tkn.i, tkn.dep_, tkn.head.i,
-                    tkn.tag_, tkn.ent_type_,
-                    [child for child in tkn.children]))
+            ISLTokens.insert(j, make_isl_token(tkn))
             j += 1
 
     # Drop tokens not used in ISL
@@ -234,7 +226,7 @@ def eng_isl_translate(doc):
 
     if doc2:
         ISLTokens2 = eng_isl_translate(doc2)
-        ISLTokens.append(and_tkn)
+        ISLTokens.append(make_isl_token(and_tkn))
         ISLTokens.extend(ISLTokens2)
 
     return ISLTokens
@@ -261,6 +253,101 @@ def translate_text(text):
     return raw_isl_text
 
 
+def get_role(token):
+    """Map ISLToken dep/tag/ent_type to a human-readable grammatical role."""
+    # Named entities recognized by spaCy
+    if token.ent_type in ('PERSON', 'ORG', 'GPE', 'LOC'):
+        return 'name'
+    # Proper noun POS tags (catches names spaCy NER misses)
+    if token.tag in ('NNP', 'NNPS'):
+        return 'name'
+    # Heuristic: capitalized original text is likely a name (catches names spaCy misclassifies)
+    # Skip tags that are clearly not names, and handle sentence-initial capitalization
+    orig = token.orig_text or token.text
+    _non_name_tags = ('PRP', 'PRP$', 'MD', 'DT', 'IN', 'CC', 'TO', 'EX')
+    if orig and token.tag not in _non_name_tags and not token.tag.startswith(('VB', 'W', 'RB')):
+        words = orig.split()
+        if len(words) == 1:
+            # Single word: only trust capitalization if NOT at sentence start (orig_id > 0)
+            if token.orig_id > 0 and orig[0].isupper():
+                return 'name'
+        else:
+            # Multi-word: check if any word after the first is capitalized (ignoring articles)
+            if any(w[0].isupper() for w in words[1:] if w.lower() not in ('a', 'an', 'the')):
+                return 'name'
+    if token.dep in ('nsubj', 'nsubjpass'):
+        return 'subject'
+    if token.dep == 'dobj':
+        return 'object'
+    if token.dep == 'neg':
+        return 'negation'
+    if token.dep == 'aux':
+        return 'auxiliary'
+    if token.tag.startswith('W'):
+        return 'question_word'
+    if token.dep == 'ROOT' and token.tag.startswith('VB'):
+        return 'verb'
+    if token.tag.startswith('VB'):
+        return 'verb'
+    if token.tag.startswith('JJ'):
+        return 'adjective'
+    if token.tag.startswith('RB'):
+        return 'adverb'
+    if token.tag in ('NN', 'NNS'):
+        return 'noun'
+    if token.tag == 'PRP' or token.tag == 'PRP$':
+        return 'pronoun'
+    if token.tag == 'CC':
+        return 'conjunction'
+    if token.tag == 'CD':
+        return 'number'
+    if token.tag == 'IN':
+        return 'preposition'
+    return 'other'
+
+
+def get_pos(tag):
+    """Map spaCy tag to a readable part-of-speech label."""
+    if tag.startswith('VB'):
+        return 'verb'
+    if tag.startswith('NN'):
+        return 'noun'
+    if tag.startswith('JJ'):
+        return 'adjective'
+    if tag.startswith('RB'):
+        return 'adverb'
+    if tag.startswith('PRP'):
+        return 'pronoun'
+    if tag.startswith('W'):
+        return 'question_word'
+    if tag == 'CC':
+        return 'conjunction'
+    if tag == 'CD':
+        return 'number'
+    if tag == 'IN':
+        return 'preposition'
+    if tag == 'MD':
+        return 'modal'
+    return 'other'
+
+
+def translate_text_detailed(text):
+    """Convert English text to ISL gloss with token role details."""
+    raw_token_list = translate_to_tokens(text)
+
+    gloss = " ".join([isl_tkn.text.lower() for isl_tkn in raw_token_list])
+
+    tokens = []
+    for tkn in raw_token_list:
+        tokens.append({
+            "word": tkn.text.lower(),
+            "role": get_role(tkn),
+            "pos": get_pos(tkn.tag)
+        })
+
+    return gloss, tokens
+
+
 def main(argv):
     text = ''
 
@@ -280,7 +367,10 @@ def main(argv):
     if not text:
         text = "Where is Sanket going?"
 
-    print(translate_text(text))
+    gloss, tokens = translate_text_detailed(text)
+    print(f"Gloss: {gloss}")
+    for t in tokens:
+        print(f"  {t['word']:20s} role={t['role']:15s} pos={t['pos']}")
 
 
 if __name__ == "__main__":

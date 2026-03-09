@@ -1,11 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from spacy_rules import translate_text, translate_to_tokens
+from spacy_rules import translate_text, translate_to_tokens, translate_text_detailed
 
 app = FastAPI(
     title="ISL Translator API",
     description="Translates English text to Indian Sign Language (ISL) gloss using spaCy rules.",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 
@@ -13,9 +13,16 @@ class TranslateRequest(BaseModel):
     text: str
 
 
+class TokenDetail(BaseModel):
+    word: str
+    role: str
+    pos: str
+
+
 class TranslateResponse(BaseModel):
     input: str
     isl_gloss: str
+    tokens: list[TokenDetail]
 
 
 class TokensResponse(BaseModel):
@@ -31,13 +38,13 @@ def root():
 @app.post("/translate", response_model=TranslateResponse)
 def translate(request: TranslateRequest):
     """
-    Translate English text to ISL gloss (space-separated words in ISL word order).
+    Translate English text to ISL gloss with grammatical role info for each token.
     """
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text must not be empty.")
 
-    gloss = translate_text(request.text)
-    return TranslateResponse(input=request.text, isl_gloss=gloss)
+    gloss, tokens = translate_text_detailed(request.text)
+    return TranslateResponse(input=request.text, isl_gloss=gloss, tokens=tokens)
 
 
 @app.post("/translate/tokens", response_model=TokensResponse)
@@ -72,5 +79,5 @@ def translate_get(text: str):
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text must not be empty.")
 
-    gloss = translate_text(text)
-    return TranslateResponse(input=text, isl_gloss=gloss)
+    gloss, tokens = translate_text_detailed(text)
+    return TranslateResponse(input=text, isl_gloss=gloss, tokens=tokens)
