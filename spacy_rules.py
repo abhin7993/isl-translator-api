@@ -137,6 +137,25 @@ def eng_isl_translate(doc):
         tag_list.append(token.tag_)
         type_list.append(token.ent_type_)
 
+    # Verb-less utterances (greetings, fragments, repeated phrases like
+    # "good morning good morning good morning") have no real sentence
+    # structure. spaCy still assigns ROOT/nsubj/etc. on a best-effort basis,
+    # but the ISL reordering below then scrambles word order — e.g.
+    # "good morning good morning good morning" becomes
+    # "morning morning good good good morning", which breaks contiguous
+    # phrase-clip matching downstream. Bail out and emit tokens in original
+    # document order (post-chunking) when no verb is present.
+    has_verb = any(t.startswith('VB') for t in tag_list)
+    if not has_verb:
+        # Compare lemma to droplist (which holds lemmas, e.g. 'be', 'do', 'the')
+        fragment_tokens = [make_isl_token(tkn) for tkn in doc
+                           if tkn.lemma_ not in droplist]
+        if doc2:
+            ISLTokens2 = eng_isl_translate(doc2)
+            fragment_tokens.append(make_isl_token(and_tkn))
+            fragment_tokens.extend(ISLTokens2)
+        return fragment_tokens
+
     # DATE goes first in ISL sentences
     if "DATE" in type_list:
         date_i = type_list.index("DATE")
@@ -332,15 +351,25 @@ def get_pos(tag):
 
 
 def translate_text_detailed(text):
-    """Convert English text to ISL gloss with token role details."""
+    """Convert English text to ISL gloss with token role details.
+
+    Each token entry includes:
+      - word: lemma/gloss form (lowercased) — what Unity matches against clip names
+      - original: the user's original English word (lowercased) — what the Vocabulary
+        Stats page displays. May be multi-word for entities/noun chunks merged by
+        token_chunker (e.g. "Sanket Vohra").
+      - role / pos: existing role + POS tags, unchanged
+    """
     raw_token_list = translate_to_tokens(text)
 
     gloss = " ".join([isl_tkn.text.lower() for isl_tkn in raw_token_list])
 
     tokens = []
     for tkn in raw_token_list:
+        original = (tkn.orig_text or tkn.text).lower()
         tokens.append({
             "word": tkn.text.lower(),
+            "original": original,
             "role": get_role(tkn),
             "pos": get_pos(tkn.tag)
         })

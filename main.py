@@ -15,6 +15,7 @@ class TranslateRequest(BaseModel):
 
 class TokenDetail(BaseModel):
     word: str
+    original: str = ""
     role: str
     pos: str
 
